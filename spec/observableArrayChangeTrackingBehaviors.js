@@ -84,6 +84,32 @@ describe('Observable Array change tracking', function() {
         });
     });
 
+    it('Converts a non array to an array', function() {
+        captureCompareArraysCalls(function(callLog) {
+            var myArray = ko.observable('hello').extend({'trackArrayChanges':true}),
+                changelist1;
+
+            myArray.subscribe(function(changes) { changelist1 = changes; }, null, 'arrayChange');
+            myArray(1);
+
+            // See that, not only did it invoke compareArrays only once, but the
+            // return values from getChanges are the same array instances
+            expect(callLog.length).toBe(1);
+            expect(changelist1).toEqual([
+                { status: 'added', value: 1, index: 0 },
+                { status: 'deleted', value: 'hello', index: 0 }
+            ]);
+
+            // Objects get converted to Array
+            myArray({a: 1});
+            expect(callLog.length).toBe(2);
+            expect(changelist1).toEqual([
+                { status: 'added', value: {a: 1}, index: 0 },
+                { status: 'deleted', value: 1, index: 0 }
+            ]);
+        });
+    });
+
     it('Skips the diff algorithm when the array mutation is a known operation', function() {
         captureCompareArraysCalls(function(callLog) {
             var myArray = ko.observableArray(['Alpha', 'Beta', 'Gamma']),
@@ -347,7 +373,7 @@ describe('Observable Array change tracking', function() {
         };
         var list = ko.observableArray([]);
 
-        // This adds all descendent nodes to the list when a node is added
+        // This adds all descendant nodes to the list when a node is added
         list.subscribe(function (events) {
             events = events.slice(0);
             for (var i = 0; i < events.length; i++) {
@@ -362,7 +388,7 @@ describe('Observable Array change tracking', function() {
 
         // Add the top-level node
         list.push(toAdd);
-        // See that descendent nodes are also added
+        // See that descendant nodes are also added
         expect(list()).toEqual([ toAdd, toAdd.nodes[0], toAdd.nodes[1], toAdd.nodes[2], toAdd.nodes[0].nodes[0] ]);
     });
 

@@ -360,6 +360,11 @@ describe('Binding: Value', function() {
             observable("");
             expect(testNode.childNodes[0].selectedIndex).toEqual(0);
 
+            // Also check that the selection doesn't change later (see https://github.com/knockout/knockout/issues/2218)
+            waits(10);
+            runs(function() {
+                expect(testNode.childNodes[0].selectedIndex).toEqual(0);
+            });
         });
 
         it('Should display the caption when the model value changes to undefined, null, or \"\" when options specified directly', function() {
@@ -564,6 +569,17 @@ describe('Binding: Value', function() {
 
                 select.selectedIndex = 2;
                 observable("");
+                expect(select.selectedIndex).toEqual(0);
+            });
+
+            it('Should display the caption when the model value changes to undefined after having no selection', function() {
+                var observable = ko.observable('B');
+                testNode.innerHTML = "<select data-bind='options:[\"A\", \"B\"], optionsCaption:\"Select...\", value:myObservable, valueAllowUnset:true'></select>";
+                ko.applyBindings({ myObservable: observable }, testNode);
+                var select = testNode.childNodes[0];
+
+                select.selectedIndex = -1;
+                observable(undefined);
                 expect(select.selectedIndex).toEqual(0);
             });
 

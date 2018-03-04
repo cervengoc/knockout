@@ -28,7 +28,7 @@ describe("Throttled observables", function() {
         // Wait until after timeout
         waitsFor(function() {
             return notifiedValues.length > 0;
-        }, 300);
+        }, 500);
         runs(function() {
             expect(notifiedValues.length).toEqual(1);
             expect(notifiedValues[0]).toEqual("F");
@@ -196,14 +196,14 @@ describe('Rate-limited', function() {
             expect(notifySpy).toHaveBeenCalledWith('a');
         });
 
-        it('Uses latest settings for future notification and previous settings for pending notificaiton', function() {
+        it('Uses latest settings for future notification and previous settings for pending notification', function() {
             // This test describes the current behavior for the given scenario but is not a contract for that
             // behavior, which could change in the future if convenient.
             var subscribable = new ko.subscribable().extend({rateLimit:250});
             var notifySpy = jasmine.createSpy('notifySpy');
             subscribable.subscribe(notifySpy);
 
-            subscribable.notifySubscribers('a');  // Pending notificaiton
+            subscribable.notifySubscribers('a');  // Pending notification
 
             // Apply new setting and schedule new notification
             subscribable = subscribable.extend({rateLimit:500});
@@ -217,6 +217,11 @@ describe('Rate-limited', function() {
             notifySpy.reset();
             jasmine.Clock.tick(250);
             expect(notifySpy).toHaveBeenCalledWith('b');
+        });
+
+        it('Should return "[object Object]" with .toString', function() {
+          // Issue #2252: make sure .toString method does not throw error
+          expect(new ko.subscribable().toString()).toBe('[object Object]')
         });
     });
 
@@ -636,7 +641,7 @@ describe('Rate-limited', function() {
                     }
                 }).extend({rateLimit:500});
 
-            // Initially the computed evaluated sucessfully
+            // Initially the computed evaluated successfully
             expect(computed()).toEqual(1);
 
             expect(function () {
@@ -650,6 +655,7 @@ describe('Rate-limited', function() {
             expect(computed()).toEqual(1);
             // The computed should not be dependent on the second observable
             expect(computed.getDependenciesCount()).toEqual(1);
+            expect(computed.getDependencies()).toEqual([observableSwitch]);
 
             // Updating the second observable shouldn't re-evaluate computed
             observableValue(2);
@@ -1031,7 +1037,7 @@ describe('Deferred', function() {
         it('Should *not* delay update of dependent rate-limited computed observable', function() {
             var data = ko.observable('A'),
                 deferredComputed = ko.computed(data).extend({deferred:true}),
-                dependentComputed = ko.computed(deferredComputed).extend({rateLimit: 500});
+                dependentComputed = ko.computed(deferredComputed).extend({rateLimit: 500}),
                 notifySpy = jasmine.createSpy('notifySpy'),
                 subscription = dependentComputed.subscribe(notifySpy);
 
@@ -1147,6 +1153,10 @@ describe('Deferred', function() {
             source({ key: 'value' });
             jasmine.Clock.tick(1);
             expect(countEval).toEqual(1);
+
+            // Reading it again shouldn't cause an update
+            expect(c2()).toEqual(c1());
+            expect(countEval).toEqual(1);
         });
 
         it('Should ignore recursive dirty events', function() {
@@ -1172,6 +1182,117 @@ describe('Deferred', function() {
             expect(dSpy.calls.length).toBe(2);  // 1 for a, and 1 for b
 
             jasmine.Clock.tick(1);
+        });
+
+        it('Should not cause loss of updates when an intermediate value is read by a dependent computed observable', function() {
+            // From https://github.com/knockout/knockout/issues/1835
+            var one = ko.observable(false).extend({deferred: true}),
+                onePointOne = ko.computed(one).extend({deferred: true}),
+                two = ko.observable(false),
+                three = ko.computed(function() { return onePointOne() || two(); }),
+                threeNotifications = [];
+
+            three.subscribe(function(val) {
+                threeNotifications.push(val);
+            });
+
+            // The loop shows that the same steps work continuously
+            for (var i = 0; i < 3; i++) {
+                expect(onePointOne() || two() || three()).toEqual(false);
+                threeNotifications = [];
+
+                one(true);
+                expect(threeNotifications).toEqual([]);
+                two(true);
+                expect(threeNotifications).toEqual([true]);
+                two(false);
+                expect(threeNotifications).toEqual([true]);
+                one(false);
+                expect(threeNotifications).toEqual([true]);
+
+                jasmine.Clock.tick(1);
+                expect(threeNotifications).toEqual([true, false]);
+            }
+        });
+
+        it('Should only notify changes if computed was evaluated', function() {
+            // See https://github.com/knockout/knockout/issues/2240
+            // Set up a scenario where a computed will be marked as dirty but won't get marked as
+            // stale and so won't be re-evaluated
+            this.restoreAfter(ko.options, 'deferUpdates');
+            ko.options.deferUpdates = true;
+
+            var obs = ko.observable('somevalue'),
+                isTruthy = ko.pureComputed(function() { return !!obs(); }),
+                objIfTruthy = ko.pureComputed(function() { return isTruthy(); }).extend({ notify: 'always' }),
+                notifySpy = jasmine.createSpy('callback'),
+                subscription = objIfTruthy.subscribe(notifySpy);
+
+            obs('someothervalue');
+            jasmine.Clock.tick(1);
+            expect(notifySpy).not.toHaveBeenCalled();
+
+            obs('');
+            jasmine.Clock.tick(1);
+            expect(notifySpy).toHaveBeenCalled();
+            expect(notifySpy.argsForCall).toEqual([[false]]);
+            notifySpy.reset();
+
+            obs(undefined);
+            jasmine.Clock.tick(1);
+            expect(notifySpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('ko.when', function() {
+        it('Runs callback in a sepearate task when predicate function becomes true, but only once', function() {
+            this.restoreAfter(ko.options, 'deferUpdates');
+            ko.options.deferUpdates = true;
+
+            var x = ko.observable(3),
+                called = 0;
+
+            ko.when(function () { return x() === 4; }, function () { called++; });
+
+            x(5);
+            expect(called).toBe(0);
+            expect(x.getSubscriptionsCount()).toBe(1);
+
+            x(4);
+            expect(called).toBe(0);
+
+            jasmine.Clock.tick(1);
+            expect(called).toBe(1);
+            expect(x.getSubscriptionsCount()).toBe(0);
+
+            x(3);
+            x(4);
+            jasmine.Clock.tick(1);
+            expect(called).toBe(1);
+            expect(x.getSubscriptionsCount()).toBe(0);
+        });
+
+        it('Runs callback in a sepearate task if predicate function is already true', function() {
+            this.restoreAfter(ko.options, 'deferUpdates');
+            ko.options.deferUpdates = true;
+
+            var x = ko.observable(4),
+                called = 0;
+
+            ko.when(function () { return x() === 4; }, function () { called++; });
+
+            expect(called).toBe(0);
+            expect(x.getSubscriptionsCount()).toBe(1);
+
+            jasmine.Clock.tick(1);
+            expect(called).toBe(1);
+            expect(x.getSubscriptionsCount()).toBe(0);
+
+            x(3);
+            x(4);
+            jasmine.Clock.tick(1);
+            expect(called).toBe(1);
+            expect(x.getSubscriptionsCount()).toBe(0);
         });
     });
 });
