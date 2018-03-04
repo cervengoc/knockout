@@ -21,6 +21,10 @@ ko.bindingHandlers['event'] = {
                 ko.utils.registerEventHandler(element, eventName, function (event) {
                     var handlerReturnValue;
                     var handlerFunction = valueAccessor()[eventName];
+                    if (handlerFunction !== null && handlerFunction !== undefined && typeof handlerFunction !== "function") {
+                        throw new Error("The value for a '" + eventName + "' event binding must be a function");
+                    }
+
                     if (!handlerFunction)
                         return;
 
@@ -28,7 +32,8 @@ ko.bindingHandlers['event'] = {
                         // Take all the event args, and prefix with the viewmodel
                         var argsForHandler = ko.utils.makeArray(arguments);
                         viewModel = bindingContext['$data'];
-                        argsForHandler.unshift(viewModel);
+                        var firstArgument = eventName === "submit" ? element : viewModel;
+                        argsForHandler.unshift(firstArgument);
                         handlerReturnValue = handlerFunction.apply(viewModel, argsForHandler);
                     } finally {
                         if (handlerReturnValue !== true) { // Normally we want to prevent default action. Developer can override this be explicitly returning true.

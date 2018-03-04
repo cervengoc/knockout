@@ -1,6 +1,24 @@
 describe('Binding: Event', function() {
     beforeEach(jasmine.prepareTestNode);
 
+    it('Should throw an error if bound value is not a function', function () {
+        var koOnError = ko.onError;
+        var lastError;
+        ko.onError = function(e) {
+            lastError = e;
+        }
+
+        testNode.innerHTML = "<a href='#' data-bind='event: { click: a }'>hey</button>";
+        ko.applyBindings({ a: 1 }, testNode);
+
+        try {
+            ko.utils.triggerEvent(testNode.childNodes[0], "click");
+            expect(lastError.message).toContain("The value for");
+        } finally {
+            ko.onError = koOnError;
+        }
+    });
+
     it('Should invoke the supplied function when the event occurs, using model as \'this\' param and first arg, and event as second arg', function () {
         var model = {
             firstWasCalled: false,
