@@ -32,8 +32,7 @@ ko.bindingHandlers['event'] = {
                         // Take all the event args, and prefix with the viewmodel
                         var argsForHandler = ko.utils.makeArray(arguments);
                         viewModel = bindingContext['$data'];
-                        var firstArgument = eventName === "submit" ? element : viewModel;
-                        argsForHandler.unshift(firstArgument);
+                        argsForHandler.unshift(viewModel);
                         handlerReturnValue = handlerFunction.apply(viewModel, argsForHandler);
                     } finally {
                         if (handlerReturnValue !== true) { // Normally we want to prevent default action. Developer can override this be explicitly returning true.
