@@ -44,7 +44,7 @@ ko.bindingHandlers['event'] = {
                         }
                     }
 
-                    var bubble = allBindings.get(eventName + 'Bubble') !== false;
+                    var bubble = allBindings.get(eventName + 'Bubble') !== false && handlerReturnValue !== false;
                     if (!bubble) {
                         event.cancelBubble = true;
                         if (event.stopPropagation)

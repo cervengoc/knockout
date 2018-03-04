@@ -82,6 +82,21 @@ describe('Binding: Event', function() {
         expect(model.outerWasCalled).toEqual(false);
     });
 
+    it('Should be able to prevent bubbling of bubblable events using an explicit false return value from handler', function() {
+      var model = {
+        innerWasCalled: false, innerDoCall: function () {
+            this.innerWasCalled = true;
+            return false;
+        },
+        outerWasCalled: false, outerDoCall: function () { this.outerWasCalled = true; }
+      };
+      testNode.innerHTML = "<div data-bind='event:{click:outerDoCall}'><button data-bind='event:{click:innerDoCall}'>hey</button></div>";
+      ko.applyBindings(model, testNode);
+      ko.utils.triggerEvent(testNode.childNodes[0].childNodes[0], "click");
+      expect(model.innerWasCalled).toEqual(true);
+      expect(model.outerWasCalled).toEqual(false);
+    });
+
     it('Should be able to supply handler params using "bind" helper', function() {
         // Using "bind" like this just eliminates the function literal wrapper - it's purely stylistic
         var didCallHandler = false, someObj = {};
